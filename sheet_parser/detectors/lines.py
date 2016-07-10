@@ -1,27 +1,20 @@
 import cv2
 import numpy as np
 import math
+from .base import BaseDetector
 
 
-class LineDetector(object):
+class LineDetector(BaseDetector):
     line_color = (0, 100, 255)
     lines = list()
 
     def __init__(self, src, threshold=50, min_line_width=100):
-        self.src = src
+        super().__init__(src)
         self.threshold = threshold
         self.min_line_width = min_line_width
+        self.lines = self.detect()
 
-        ret, self.dst = cv2.threshold(src, 180, 255, cv2.THRESH_BINARY_INV)
-        self.output = cv2.cvtColor(src, cv2.COLOR_GRAY2BGR)
-
-    def process(self):
-        self.lines = self.detect_lines()
-        print('lines: {}'.format(len(self.lines)))
-        image = self.draw_lines()
-        return image
-
-    def detect_lines(self):
+    def detect(self):
         result = list()
         tmp = list()
 
@@ -48,8 +41,9 @@ class LineDetector(object):
 
         return result
 
-    def draw_lines(self):
-        img = cv2.cvtColor(self.src, cv2.COLOR_GRAY2BGR)
+    def draw(self, img=None):
+        if img is None:
+            img = cv2.cvtColor(self.src, cv2.COLOR_GRAY2BGR)
         for line in self.lines:
             start = (line[0][0], line[0][1])
             end = (line[0][2], line[0][3])
