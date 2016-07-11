@@ -10,8 +10,8 @@ class Parser(object):
         self.shape_detector = ShapeDetector()
 
     def process(self, source_image):
-        img = cv2.imread(source_image, 0)
-        result = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
+        img = cv2.imread(source_image)
+        result = img
 
         staff_lines, bar_lines = self.line_detector.find_lines(img)
         shapes = self.shape_detector.find_shapes(img)
