@@ -1,7 +1,7 @@
 import cv2
 import numpy as np
-import math
 import os
+import random
 
 from .base import BaseDetector
 
@@ -11,60 +11,48 @@ class ShapeDetector(BaseDetector):
     contours = []
     img = None
     shapes = []
+    staff_lines = None
 
-    def find_shapes(self, src):
-        contours = self.find_contours(src)
+    symbols = {
+        'quarter': ['../images/note_02.png'],
+        'half': ['../images/note_03.png'],
+        'full': ['../images/note_04.png'],
+    }
 
-        blur = cv2.GaussianBlur(self.gray, (5, 5), 0)
-        thresh = cv2.adaptiveThreshold(blur, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY_INV, 21, 15)
+    def find_shapes(self, src, staff_lines):
+        self.staff_lines = staff_lines
+        self.set_source(src)
 
-        model = self.setup_model()
+        img_rgb = self.src
+        clean_img = self.remove_lines_from_image(self.gray)
 
-        for contour in contours:
-            x, y, w, h = cv2.boundingRect(contour)
-            roi = thresh[y: y + h, x: x + w]
+        for key, templates in self.symbols.items():
+            result = self.match_templates(clean_img, templates)
 
-            roismall = cv2.resize(roi, (10, 10))
-            roismall = roismall.reshape((1, 100))
-            roismall = np.float32(roismall)
+            color = (0, random.randint(0, 255), random.randint(0, 255))
+            for pt in zip(*result[0][0][::-1]):
+                cv2.rectangle(img_rgb, pt, (pt[0] + result[0][1], pt[1] + result[0][2]), color, 1)
 
-            retval, results, neigh_resp, dists = model.findNearest(roismall, k=1)
-
-            self.shapes.append({
-                'label': chr(results[0][0]),
-                'contour': contour,
-                'x': x,
-                'y': y
-            })
+        cv2.imshow('cleared imageerer', self.src)
 
         return self.shapes
 
-    def find_contours(self, src):
-        self.set_source(src)
-        img, contours, hierarchy = cv2.findContours(self.img, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-
-        for contour in contours:
-            area = cv2.contourArea(contour)
-            if 5 < area:
-                x, y, w, h = cv2.boundingRect(contour)
-                if h > 5 and w > 5:
-                    self.contours.append(contour)
-
-        return self.contours
-
-    def setup_model(self):
+    def match_templates(self, src, template_imgs):
         dir = os.path.dirname(__file__)
+        result = []
 
-        # load training set
-        samples = np.loadtxt(os.path.join(dir, '../../training/data/samples.data'), np.float32)
-        responses = np.loadtxt(os.path.join(dir, '../../training/data/responses.data'), np.float32)
-        responses = responses.reshape((responses.size, 1))
+        for template_img in template_imgs:
+            template = cv2.imread(os.path.join(dir, template_img), 0)
 
-        # train model on set
-        model = cv2.ml.KNearest_create()
-        model.train(samples, cv2.ml.ROW_SAMPLE, responses)
+            w, h = template.shape[::-1]
+            res = cv2.matchTemplate(src, template, cv2.TM_CCOEFF_NORMED)
+            threshold = 0.75
+            loc = np.where(res >= threshold)
 
-        return model
+            result.append([loc, w, h])
+
+        # TODO clean up result!!
+        return result
 
     def set_source(self, src):
         super().set_source(src)
@@ -72,17 +60,24 @@ class ShapeDetector(BaseDetector):
         cv2.imshow('cleared image', self.img)
 
     def remove_lines_from_image(self, src):
-        # first attempt using morphology
-        # img = cv2.adaptiveThreshold(src, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY_INV, 21, 15)
-        # vertical_size = 3
-        # structure = cv2.getStructuringElement(cv2.MORPH_RECT, (1, vertical_size))
-        # cv2.morphologyEx(img, cv2.MORPH_OPEN, structure, dst=img, iterations=1)
+        img = src
+        for line in self.staff_lines:
+            x = line[0][0]
+            y = line[0][1]
 
-        # second attempt using blur
-        blur = cv2.GaussianBlur(src, (3, 3), 3)
-        ret3, img = cv2.threshold(blur, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
+            while x < line[0][2]:
+                color = self.get_color(img, x, y - 1)
+                cv2.rectangle(img, (x, y), (x, y), color, thickness=cv2.FILLED)
+                x += 1
 
+        ret3, img = cv2.threshold(img, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
         return img
+
+    def get_color(self, img, x, y):
+        intensity = int(img[y, x])  # yes, x and y coordinates are the other way around
+        if intensity > 180:
+            return 255, 255, 255
+        return intensity, intensity, intensity
 
     def draw(self, img=None):
         # draw bounding boxes of found shapes

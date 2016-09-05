@@ -14,10 +14,10 @@ class Parser(object):
         result = img
 
         staff_lines, bar_lines = self.line_detector.find_lines(img)
-        shapes = self.shape_detector.find_shapes(img)
+        shapes = self.shape_detector.find_shapes(img, staff_lines)
 
         result = self.line_detector.draw(staff_lines, result)
         result = self.line_detector.draw(bar_lines, result)
-        result = self.shape_detector.draw(result)
+        # result = self.shape_detector.draw(result)
 
-        cv2.imshow('Resulting image', result)
+        # cv2.imshow('Resulting image', result)
